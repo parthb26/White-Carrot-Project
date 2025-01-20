@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -39,12 +40,19 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 
+func DashboardHandler(w http.ResponseWriter, r *http.Request) {
+	// Serve a separate HTML page
+	http.ServeFile(w, r, "./static/dashboard.html")
+}
+
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
+	// Validate the state
 	if r.FormValue("state") != oauthStateString {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/dashboard", http.StatusFound)
 		return
 	}
 
+	// Exchange code for token
 	code := r.FormValue("code")
 	token, err := googleOauthConfig.Exchange(context.Background(), code)
 	if err != nil {
@@ -52,7 +60,7 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the token to get user information
+	// Use token to get user information
 	client := googleOauthConfig.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
@@ -61,6 +69,15 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Display user information on successful login
-	http.ServeFile(w, r, "./static/index.html")
+	// Parse the user information
+	var userInfo map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Display user information
+	w.Header().Set("Content-Type", "text/html")
+	fmt.Fprintf(w, "<h1>Welcome %s!</h1>", userInfo["name"])
+	fmt.Fprintf(w, "<p>Email: %s</p>", userInfo["email"])
 }
