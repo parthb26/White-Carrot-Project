@@ -86,16 +86,23 @@ func getUserTokenFromSession(r *http.Request) any {
 	return token
 }
 
-func storeTokenInSession(w http.ResponseWriter, token *oauth2.Token) {
-	// Make sure to use the correct session handling code
-	session, err := store.Get(r, "session-name")
-	if err != nil {
-		http.Error(w, "Error creating session", http.StatusInternalServerError)
-		return
-	}
+func storeTokenInSession(w http.ResponseWriter, r *http.Request, token *oauth2.Token) {
+    // Retrieve the session
+    session, err := store.Get(r, "session-name")
+    if err != nil {
+        http.Error(w, "Error retrieving session", http.StatusInternalServerError)
+        return
+    }
 
-	session.Values["token"] = token
-	session.Save(w, r) // Pass both ResponseWriter and Request
+    // Store the token in the session
+    session.Values["token"] = token
+
+    // Save the session
+    err = session.Save(r, w)
+    if err != nil {
+        http.Error(w, "Error saving session", http.StatusInternalServerError)
+        return
+    }
 }
 
 // getGoogleCalendarEvents fetches the Google Calendar events using the user's token
@@ -133,40 +140,41 @@ type GoogleEvent struct {
 }
 
 func CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	// Validate the state
-	if r.FormValue("state") != oauthStateString {
-		http.Redirect(w, r, "/", http.StatusFound)
-		return
-	}
+    // Validate the state
+    if r.FormValue("state") != oauthStateString {
+        http.Redirect(w, r, "/", http.StatusFound)
+        return
+    }
 
-	// Exchange code for token
-	code := r.FormValue("code")
-	token, err := googleOauthConfig.Exchange(context.Background(), code)
-	if err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
-	// Use token to get user information
-	client := googleOauthConfig.Client(context.Background(), token)
-	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
-	if err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
-	defer resp.Body.Close()
+    // Exchange code for token
+    code := r.FormValue("code")
+    token, err := googleOauthConfig.Exchange(context.Background(), code)
+    if err != nil {
+        http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+        return
+    }
+    
+    // Use token to get user information
+    client := googleOauthConfig.Client(context.Background(), token)
+    resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+    if err != nil {
+        http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+        return
+    }
+    defer resp.Body.Close()
 
-	// Parse the user information
-	var userInfo map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
+    // Parse the user information
+    var userInfo map[string]interface{}
+    if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+        http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+        return
+    }
 
-	// Display user information
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, "<h1>Welcome %s!</h1>", userInfo["name"])
-	fmt.Fprintf(w, "<p>Email: %s</p>", userInfo["email"])
+    // Display user information
+    w.Header().Set("Content-Type", "text/html")
+    fmt.Fprintf(w, "<h1>Welcome %s!</h1>", userInfo["name"])
+    fmt.Fprintf(w, "<p>Email: %s</p>", userInfo["email"])
 
-	// Store the token in session for future use
-	storeTokenInSession(w, token)
+    // Store the token in session for future use
+    storeTokenInSession(w, r, token)
 }
