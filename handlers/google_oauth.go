@@ -170,11 +170,11 @@ func CallbackHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Display user information
-    w.Header().Set("Content-Type", "text/html")
-    fmt.Fprintf(w, "<h1>Welcome %s!</h1>", userInfo["name"])
-    fmt.Fprintf(w, "<p>Email: %s</p>", userInfo["email"])
+    // Extract user name
+    userName := userInfo["name"]
 
-    // Store the token in session for future use
-    storeTokenInSession(w, r, token)
+    // Display the plain message
+    w.Header().Set("Content-Type", "text/plain")
+    fmt.Fprintf(w, "Welcome %s", userName)
 }
+
