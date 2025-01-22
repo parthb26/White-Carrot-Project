@@ -44,10 +44,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func DashboardHandler(w http.ResponseWriter, r *http.Request) {
-	// Get user token from session (ensure it's a *oauth2.Token)
-	userTokenInterface := getUserTokenFromSession(r)
+	// Get user token from session
+	userTokenInterface := getUserTokenFromSession(r) // Corrected function name
 	if userTokenInterface == nil {
-		http.Error(w, "User token not found", http.StatusUnauthorized)
+		http.Error(w, "User  token not found", http.StatusUnauthorized)
 		return
 	}
 
@@ -58,8 +58,12 @@ func DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the date range from the form
+	startDate := r.FormValue("start_date")
+	endDate := r.FormValue("end_date")
+
 	// Fetch Google Calendar events
-	events, err := getGoogleCalendarEvents(userToken)
+	events, err := getGoogleCalendarEvents(userToken, startDate, endDate)
 	if err != nil {
 		http.Error(w, "Failed to fetch events", http.StatusInternalServerError)
 		return
@@ -106,10 +110,17 @@ func storeTokenInSession(w http.ResponseWriter, r *http.Request, token *oauth2.T
 }
 
 // getGoogleCalendarEvents fetches the Google Calendar events using the user's token
-func getGoogleCalendarEvents(token *oauth2.Token) ([]GoogleEvent, error) {
-	// Use the token to make a request to Google Calendar API
+// Update getGoogleCalendarEvents to accept date range
+func getGoogleCalendarEvents(token *oauth2.Token, startDate string, endDate string) ([]GoogleEvent, error) {
 	client := googleOauthConfig.Client(context.Background(), token)
-	resp, err := client.Get("https://www.googleapis.com/calendar/v3/calendars/primary/events")
+
+	// Build the request URL with date range
+	url := "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+	if startDate != "" && endDate != "" {
+		url += fmt.Sprintf("?timeMin=%s&timeMax=%s", startDate, endDate)
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
